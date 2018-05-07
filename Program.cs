@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 
 namespace IGC
 {
@@ -12,67 +13,50 @@ namespace IGC
     {
         static void Main(string[] args)
         {
-           List<string> statusList = new List<string>();
-           string file_path = @"list.txt";
-           string[] lines = System.IO.File.ReadAllLines(file_path);
-           Parallel.ForEach(lines, (url) =>
-            {
-                MyClient client = new MyClient(); 
-                //Boolean valid = CheckURL(x);
-                // Do something with the result or save it to a List/Dictionary or ...
-                string username = url.Trim();
-                url = string.Concat("http://instaram.com/", url.Trim());
-
-               
-                    try
+              string filePath = @"list.txt";
+              string filePathTemp = @"listoutput.txt";
+              
+              System.IO.File.WriteAllText(@filePathTemp,string.Empty);
+        try 
+        {
+//FileStream fs = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            StreamWriter stream_writer = new StreamWriter(filePathTemp);
+            Proxies proxiesFIFO = new Proxies();
+            
+            using(FileStream fs = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+            {  
+                              
+                using(StreamReader stream_reader = new StreamReader(fs))
+                {
+                    string lastUsername = null;
+                    while(!stream_reader.EndOfStream)
                     {
-                        client.HeadOnly = false;
-                        
-                        WebProxy proxy = new WebProxy("104.143.198.29:3128");
-                        client.Proxy = proxy;
+                      
+                        {
+                         string username = stream_reader.ReadLine().Trim(); 
+                         string proxy = proxiesFIFO.FIFO();
+                         ThreadTask threadtask = new ThreadTask( username,  proxy, stream_writer);  
+                         threadtask.setLastUsername(lastUsername);
+                         Thread executeThreadUserWasVerified = new Thread(new ThreadStart(threadtask.executeThreadUserWasVerified));  
+                         executeThreadUserWasVerified.Start(); 
+                         lastUsername = username;
 
-                        // fine, no content downloaded
-                        string source_code = client.DownloadString(url);
-                        bool contains = source_code.Contains("is_verified\":false");
-                        if(!contains)
-                        {
-                         statusList.Add(username+" true");
                         }
-                        else
-                        {
-                         statusList.Add(username+" false");
-                        }
-                        
+                      
                     }
-                    catch (Exception error)
-                    {
-                     Console.WriteLine( "Not Found: " + url);
-                    }
+                }
+                fs.Close();
+            }    
+
                 
-            });
-             
-            string [] new_lines = statusList.ToArray();
-           // Console.WriteLine(new_lines);
-            foreach(string line in new_lines)
+            
+            
+        } 
+        catch (Exception e) 
         {
-            Console.WriteLine(line);
+            Console.WriteLine("The process failed: {0}", e.ToString());
         }
-            File.WriteAllLines("new.txt", new_lines);
         }
     }
-    class MyClient : WebClient
-{
-    public bool HeadOnly { get; set; }
-
-    protected override WebRequest GetWebRequest(Uri address)
-    {
-        WebRequest req = base.GetWebRequest(address);
-
-        if (HeadOnly && req.Method == "GET")
-        {
-            req.Method = "HEAD";
-        }
-        return req;
-    }
-}
+   
 }
